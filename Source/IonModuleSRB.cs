@@ -17,24 +17,25 @@ namespace IoncrossKerbal_SRB
     {
         public const string BURN_TIME_MAX = "burnTime_max";
 
-        public ModuleEngines engine;
+        public ModuleEngines module_engine;
 
-        IonGUIThrustCurve guiThrustCurve;
-        [KSPField(isPersistant = true, guiActive = false, guiActiveEditor = false)]
-        public FloatCurve thrustPercentCurve;
+        public ThrustCurve thrustCurve;
+        public IonGUIThrustCurve thrustCurve_guiController;
 
         //Flight GUI elements
         [KSPField(guiName = "Current Thrust Percent", isPersistant = false, guiActive = true, guiActiveEditor = false)]
         public float curThrustPercent;
 
+        public double ingitionTime;
+
+
         //Editor GUI elements
-        [KSPField(guiName = "Thrust Curve", isPersistant = true, guiActive = false, guiActiveEditor = true)]
+        [KSPField(guiName = "Thrust Curve", isPersistant = false, guiActive = false, guiActiveEditor = true)]
         [UI_Toggle(disabledText = "", enabledText = "")]
         public bool editThrustCurve;
 
         [KSPField(guiName = "Current Thrust", isPersistant = false, guiActive = false, guiActiveEditor = true)]
-        public float curThrust;
-        public float thrustPercent_last;
+        public float thrust;
 
         [KSPField(guiName = "Fuel Mass (t)", isPersistant = true, guiActive = false, guiActiveEditor = true)]
         public float fuelMass;
@@ -43,9 +44,17 @@ namespace IoncrossKerbal_SRB
         [KSPField(guiName = "Burn Time (s)", isPersistant = true, guiActive = false, guiActiveEditor = true)]
         [UI_FloatRange(stepIncrement = 0.5f, maxValue = 300f, minValue = 0f)]
         public float burnTime;
+        public float burnTime_last;
         public float burnTime_min;
         public float burnTime_max;
-        public float burnTime_last;
+
+        //this will replace the module engine's thrust Limiter slider so the order of the modules doesn't affect the ordering of the interface
+        [KSPField(guiName = "Thrust Limiter (%)", isPersistant = false, guiActive = false, guiActiveEditor = true)]
+        [UI_FloatRange(stepIncrement = 0.5f, maxValue = 100f, minValue = 0f)]
+        public float thrustPercent;
+        public float thrustPercent_last;
+        public float thrustPercent_min;
+
 
 
 
@@ -62,7 +71,7 @@ namespace IoncrossKerbal_SRB
             Debug.Log("IonModuleSRB.OnAwake() " + this.part.name);
 #endif
 
-            engine = (ModuleEngines)this.part.Modules["ModuleEngines"];
+            module_engine = (ModuleEngines)this.part.Modules["ModuleEngines"];
         }
         /************************************************************************\
          * IonModuleSRB class                                                   *
@@ -112,23 +121,32 @@ namespace IoncrossKerbal_SRB
             PartResource pResource;
             Dictionary<int, double> propellInitAmounts = new Dictionary<int, double>();
 
-            guiThrustCurve = new IonGUIThrustCurve(this);
+            //setup ThrustCurve and guiController
+            thrustCurve = new ThrustCurve(module_engine.thrustPercentage / 100f);
+            thrustCurve_guiController = new IonGUIThrustCurve(this, thrustCurve);
 
             //Calculate intial burnTime and burnTime_min
-            if (null != engine && PartModule.StartState.Editor == (PartModule.StartState.Editor & state))
+            if (null != module_engine && PartModule.StartState.Editor == (PartModule.StartState.Editor & state))
             {
                 //calculate initial burnTime based on default fuel load
-                burnTime = (float)Math.Round(CalculateBurnTime(engine.maxThrust * engine.thrustPercentage / 100f) * 2f, MidpointRounding.AwayFromZero) / 2f;
-                curThrust = engine.maxThrust * engine.thrustPercentage / 100f;
+                //result is multiplied by 2, rounded, multiplied by 0.5 to round to the nearest 0.5
+                burnTime = (float)Math.Round(CalculateBurnTime(module_engine.maxThrust * module_engine.thrustPercentage / 100f) * 2f, MidpointRounding.AwayFromZero) * 0.5f;
 
-                //set thrust curve to constant
-                thrustPercentCurve.Add(0, engine.thrustPercentage);
-                thrustPercentCurve.Add(1, engine.thrustPercentage);
+                thrust = module_engine.maxThrust * module_engine.thrustPercentage / 100f;
+                thrustPercent = module_engine.thrustPercentage;
+                thrustPercent_min = module_engine.minThrust / module_engine.maxThrust * 100f;
+
+                fuelMass = CalculateFuelMass();
+
 #if DEBUG_SRB
                 Debug.Log("IonModuleSRB.OnStart(): burnTime " + burnTime + " | engine.maxThrust " + engine.maxThrust  + " | engine.thrustPercentage " + engine.thrustPercentage);
 #endif
+                /************************************\
+                 * Calculte minium burn time.       *
+                 * uses full fuel load to calc.     *
+                \************************************/
                 //Set max fuel load
-                foreach (Propellant propellant in engine.propellants)
+                foreach (Propellant propellant in module_engine.propellants)
                 {
                     pResource = (PartResource)this.part.Resources[propellant.name];
                     propellInitAmounts.Add(propellant.id, pResource.amount);
@@ -140,10 +158,10 @@ namespace IoncrossKerbal_SRB
                 }
 
                 //calculate burnTime_min based on full fuel load
-                burnTime_min = (float)Math.Round(CalculateBurnTime(engine.maxThrust), 1);
+                burnTime_min = (float)Math.Round(CalculateBurnTime(module_engine.maxThrust), 1);
 
                 //Reset fuel load
-                foreach (Propellant propellant in engine.propellants)
+                foreach (Propellant propellant in module_engine.propellants)
                 {
                     double amount;
                     if (propellInitAmounts.TryGetValue(propellant.id, out amount))
@@ -155,23 +173,24 @@ namespace IoncrossKerbal_SRB
 
                 //set previous values
                 burnTime_last = burnTime;
-                thrustPercent_last = engine.thrustPercentage;
-                fuelMass_last = fuelMass = CalculateFuelMass();
+                fuelMass_last = fuelMass;
+                thrustPercent_last = thrustPercent;
 
-                //Set bounds for UI slider
+                //Set bounds for UI sliders
                 ((UI_FloatRange)(Fields["burnTime"].uiControlEditor)).minValue = burnTime_min;
                 ((UI_FloatRange)(Fields["burnTime"].uiControlEditor)).maxValue = burnTime_max;
-                ((UI_FloatRange)(engine.Fields["thrustPercentage"].uiControlEditor)).stepIncrement = 0.5f;
+                ((UI_FloatRange)(Fields["thrustPercent"].uiControlEditor)).minValue = thrustPercent_min;
+
+                //engine's thrust limiter slider turned off (this module has its own)
+                module_engine.Fields["thrustPercentage"].guiActiveEditor = false;
 #if DEBUG_SRB
                 Debug.Log("IonModuleSRB.OnStart(): burnTime " + burnTime + " | burnTime_min " + burnTime_min);
 #endif
             }
-            //Turn off burnTime slider
-            else
+
+            else if(null != module_engine && PartModule.StartState.PreLaunch == (PartModule.StartState.PreLaunch & state))
             {
-                //Fields["fuelMass"].guiActive = false;
-                //Fields["curThrust"].guiActive = false;
-                //Fields["burnTime"].guiActive = false;
+                thrustCurve.CalculateFuelPortions();
             }
         }
 
@@ -185,7 +204,18 @@ namespace IoncrossKerbal_SRB
         {
             base.OnUpdate();
 
-            curThrustPercent = thrustPercentCurve.Evaluate(CalculateFuelMass() / fuelMass);
+            if (ingitionTime < 0 && module_engine.EngineIgnited)
+            {
+                ingitionTime = Planetarium.GetUniversalTime();
+            }
+
+            else
+            {
+                //fuel mass is only calculate in OnStart and OnGUI (when in the editor)
+                //it is therefore equal to the mass of fuel when the rocket is ignited
+                curThrustPercent = thrustCurve.Evaluate(CalculateFuelMass() / fuelMass);
+            }
+
             //engine.thrustPercentage = curThrustPercent;
 
 #if DEBUG_UPDATES
@@ -203,62 +233,34 @@ namespace IoncrossKerbal_SRB
         \************************************************************************/
         public void OnGUI()
         {
-            if (null != engine && HighLogic.LoadedSceneIsEditor)
+            if (null != module_engine && HighLogic.LoadedSceneIsEditor)
             {
                 fuelMass = CalculateFuelMass();
 
-                //If burnTime or fuelMass change adjust thrust
+                //If burnTime or fuelMass change adjust thrustPercent
                 if (burnTime != burnTime_last || fuelMass != fuelMass_last)
                 {
 #if DEBUG_UPDATES
                     Debug.Log("IonModuleSRB.OnGUI(): burnTime " + burnTime + " | burnTime_last " + burnTime_last + " | fuelMass " + fuelMass + " | fuelMass_last " + fuelMass_last);
 #endif
                     burnTime = (float)Math.Round(burnTime * 2f, MidpointRounding.AwayFromZero) / 2f;
-                    engine.thrustPercentage = (float)Math.Round(CalculateThrust(burnTime) / engine.maxThrust * 200f, MidpointRounding.AwayFromZero) / 2f;
-                    
-                    burnTime_last = burnTime;
-                    fuelMass_last = fuelMass;
-                    thrustPercent_last = engine.thrustPercentage;
-                    curThrust = engine.maxThrust * engine.thrustPercentage / 100f;
-                    guiThrustCurve.UpdateCruveTexture();
-#if DEBUG_UPDATES
-                    Debug.Log("IonModuleSRB.OnGUI(): Recalculated thrust limiter to " + engine.thrustPercentage);
-#endif
+                    AdjustThrustPercent();
                 }
 
-                //If thrust changes adjust burnTime
-                else if(engine.thrustPercentage != thrustPercent_last)
+                //If thrustPercent changes adjust burnTime
+                else if(thrustPercent != thrustPercent_last)
                 {
 #if DEBUG_UPDATES
-                    Debug.Log("IonModuleSRB.OnGUI(): engine.thrustPercentage " + engine.thrustPercentage + " | thrustPercent_last " + thrustPercent_last);
+                    Debug.Log("IonModuleSRB.OnGUI(): thrustPercent " + thrustPercent + " | thrustPercent_last " + thrustPercent_last);
 #endif
-                    engine.thrustPercentage = (float)Math.Round(engine.thrustPercentage * 2, MidpointRounding.AwayFromZero) / 2;
-                    burnTime = (float)Math.Round(CalculateBurnTime(engine.maxThrust * engine.thrustPercentage / 100f) * 2f, MidpointRounding.AwayFromZero) / 2f;
-
-                    if(burnTime < burnTime_min)
-                    {
-                        burnTime = burnTime_min;
-                        engine.thrustPercentage = (float)Math.Round(CalculateThrust(burnTime) / engine.maxThrust * 200f, MidpointRounding.AwayFromZero) / 2f;
-                    }
-                    else if(burnTime > burnTime_max)
-                    {
-                        burnTime = burnTime_max;
-                        engine.thrustPercentage = (float)Math.Round(CalculateThrust(burnTime) / engine.maxThrust * 200f, MidpointRounding.AwayFromZero) / 2f;
-                    }
-
-                    burnTime_last = burnTime;
-                    thrustPercent_last = engine.thrustPercentage;
-                    curThrust = engine.maxThrust * engine.thrustPercentage / 100f;
-                    guiThrustCurve.UpdateCruveTexture();
-#if DEBUG_UPDATES
-                    Debug.Log("IonModuleSRB.OnGUI(): Recalculated burn time to " + burnTime);
-#endif
+                    module_engine.thrustPercentage = (float)Math.Round(module_engine.thrustPercentage * 2, MidpointRounding.AwayFromZero) / 2;
+                    AdjustBurnTime();
                 }
 
+                //If editThrustCurve button is presses, open thrust curve window
                 if(editThrustCurve)
                 {
-                    //create window
-                    guiThrustCurve.windowPos = GUILayout.Window(this.GetHashCode(), guiThrustCurve.windowPos, guiThrustCurve.DrawGUI, "Edit Thrust Curve", guiThrustCurve.windowStyle);
+                    thrustCurve_guiController.windowPos = GUILayout.Window(this.GetHashCode(), thrustCurve_guiController.windowPos, thrustCurve_guiController.DrawGUI, "Edit Thrust Curve", thrustCurve_guiController.windowStyle);
                 }
             }
         }
@@ -266,7 +268,86 @@ namespace IoncrossKerbal_SRB
 
         /************************************************************************\
          * IonModuleSRB class                                                   *
-         * CalculateThrustActual function                                       *
+         * AdjustThrustPercent function                                         *
+         *                                                                      *
+         * Adjusts the thrustPercent value for changes in burn time or fuelMass.*
+        \************************************************************************/
+        public void AdjustThrustPercent()
+        {
+#if DEBUG_CALCULATIONS
+            Debug.Log("IonModuleSRB.AdjustThrustPercent() " + this.part.name);
+#endif
+            thrustPercent = CalculateThrust(burnTime) / module_engine.maxThrust * 100f;
+            thrustPercent = (float)Math.Round(thrustPercent * 2f, MidpointRounding.AwayFromZero) * 0.5f;
+
+            //If thrustPercent is below minium adjust and re-calc burn time
+            //(don't use AdjustBurnTime() to avoid posibility of back and forth loop)
+            if (thrustPercent < thrustPercent_min)
+            {
+                thrustPercent = thrustPercent_min;
+                burnTime = CalculateBurnTime(thrustPercent * module_engine.maxThrust);
+                burnTime = (float)Math.Round(burnTime * 2f, MidpointRounding.AwayFromZero) * 0.5f;
+            }
+
+            if (0 != thrustPercent_last)
+                thrustCurve.ModifiyThrust(thrustPercent / thrustPercent_last);
+            else
+                thrustCurve.ResetThrust(thrustPercent);
+
+            thrustCurve_guiController.UpdateCruveTexture();
+            module_engine.thrustPercentage = thrustPercent;
+
+            thrust = module_engine.maxThrust * thrustPercent / 100f;
+
+
+            burnTime_last = burnTime;
+            fuelMass_last = fuelMass;
+            thrustPercent_last = thrustPercent;
+#if DEBUG_CALCULATIONS
+            Debug.Log("IonModuleSRB.AdjustThrustPercent(): Recalculated thrust limiter to " + thrustPercent);
+#endif
+        }
+
+        /************************************************************************\
+         * IonModuleSRB class                                                   *
+         * AdjustBurnTime function                                              *
+         *                                                                      *
+         * Adjusts the burnTime value for changes in thrustPercent.             *
+        \************************************************************************/
+        public void AdjustBurnTime()
+        {
+#if DEBUG_CALCULATIONS
+            Debug.Log("IonModuleSRB.AdjustBurnTime() " + this.part.name);
+#endif
+            burnTime = CalculateBurnTime(module_engine.maxThrust * thrustPercent / 100f);
+            burnTime = (float)Math.Round(burnTime * 2f, MidpointRounding.AwayFromZero) * 0.5f;
+
+            if (burnTime < burnTime_min)
+            {
+                burnTime = burnTime_min;
+                AdjustThrustPercent();
+            }
+            else if (burnTime > burnTime_max)
+            {
+                burnTime = burnTime_max;
+                AdjustThrustPercent();
+            }
+            else
+            {
+                burnTime_last = burnTime;
+                fuelMass_last = fuelMass;
+                thrustPercent_last = thrustPercent;
+            }
+
+#if DEBUG_CALCULATIONS
+            Debug.Log("IonModuleSRB.AdjustBurnTime(): Recalculated burn time to " + burnTime);
+#endif
+        }
+
+
+        /************************************************************************\
+         * IonModuleSRB class                                                   *
+         * CalculateThrust function                                             *
          *                                                                      *
          * Calculates and returns the actual thrust need to generate the given  *
          * burn time with the current amount of fuel onboard at sea level.      *
@@ -288,7 +369,7 @@ namespace IoncrossKerbal_SRB
             if (0 != burnTime && 0 != mixtureProtion)
             {
                 engineMassFlow = (1 / mixtureProtion) * (float)limitingResource.amount * limitingResource.info.density / burnTime;
-                thrust = engineMassFlow * engine.atmosphereCurve.Evaluate(atmoDensity) * 9.8f;
+                thrust = engineMassFlow * module_engine.atmosphereCurve.Evaluate(atmoDensity) * 9.8f;
             }
 
 #if DEBUG_CALCULATIONS
@@ -320,7 +401,7 @@ namespace IoncrossKerbal_SRB
             float propellantLimitValue;
             float mixtureMass = CalculateMixtureMass();
             
-            foreach (Propellant propellant in engine.propellants)
+            foreach (Propellant propellant in module_engine.propellants)
             {
                 pResource = (PartResource)this.part.Resources[propellant.name];
 
@@ -360,7 +441,7 @@ namespace IoncrossKerbal_SRB
 #endif
             float mixtureMass = 0;
 
-            foreach (Propellant propellant in engine.propellants)
+            foreach (Propellant propellant in module_engine.propellants)
                 mixtureMass += propellant.ratio * ((PartResource)this.part.Resources[propellant.name]).info.density;
 
 #if DEBUG_CALCULATIONS
@@ -385,7 +466,7 @@ namespace IoncrossKerbal_SRB
             float fuelMass = 0.0f;
             PartResource pResource;
 
-            foreach(Propellant propellant in engine.propellants)
+            foreach(Propellant propellant in module_engine.propellants)
             {
                 pResource = this.part.Resources[propellant.name];
                 fuelMass += (float)pResource.amount * pResource.info.density;
@@ -415,8 +496,8 @@ namespace IoncrossKerbal_SRB
             float timeBurn = 0;
             float engineMassFlow = 0;
 
-            if (0 != engine.atmosphereCurve.Evaluate(atmoDensity))
-                engineMassFlow = thrust / (engine.atmosphereCurve.Evaluate(atmoDensity) * 9.8f);
+            if (0 != module_engine.atmosphereCurve.Evaluate(atmoDensity))
+                engineMassFlow = thrust / (module_engine.atmosphereCurve.Evaluate(atmoDensity) * 9.8f);
 
             Propellant limitingPropellant = FindLimitingPropellant();
             PartResource limitingResource = (PartResource)this.part.Resources[limitingPropellant.name];

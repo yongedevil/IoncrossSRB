@@ -13,44 +13,48 @@ using KSP;
 
 namespace IoncrossKerbal_SRB
 {
-    class IonGUIThrustCurve
+    public class IonGUIThrustCurve
     {
+        public const int COLWIDTH_POINTNUM = 75;
+        public const int COLWIDTH_POINTX = 80;
+        public const int COLWIDTH_POINTY = 80;
+
         public const int GRAPH_HEIGHT = 200;
         public const int GRAPH_WIDTH = 400;
-        public const int LABLES_X_WIDTH = 35;
-        public const int LABLES_Y_HEIGHT = 35;
+        public const int LABLES_Y_WIDTH = 35;
+        public const int LABLES_X_HEIGHT = 35;
 
-        public IonModuleSRB srbManager;
+        public IonModuleSRB module_srb;
+        public ThrustCurve thrustCurve;
 
         public Rect windowPos;
 
         public GUIStyle windowStyle;
-        GUIStyle TopLabel;
-        GUIStyle MidLabel;
-        GUIStyle BottomLabel;
-        GUIStyle LeftLable;
-        GUIStyle CentreLable;
-        GUIStyle RightLable;
+        private GUIStyle TopLabel;
+        private GUIStyle MidLabel;
+        private GUIStyle BottomLabel;
+        private GUIStyle LeftLable;
+        private GUIStyle CentreLable;
+        private GUIStyle RightLable;
 
         Texture2D curveTexture;
 
         public int curveWidth;
 
-        List<Vector2> curvePoints;
-
         /************************************************************************\
          * IonGUIThrustCurve class                                              *
          * Constructor                                                          *
         \************************************************************************/
-        public IonGUIThrustCurve(IonModuleSRB srb)
+        public IonGUIThrustCurve(IonModuleSRB module, ThrustCurve curve)
         {
-            srbManager = srb;
+            module_srb = module;
+            thrustCurve = curve;
+
             windowPos = new Rect(Screen.width / 2, Screen.height / 2, 300, 100);
             windowStyle = new GUIStyle(HighLogic.Skin.window);
 
             curveTexture = new Texture2D(GRAPH_WIDTH, GRAPH_HEIGHT);
             curveWidth = 5;
-
 
 
             //Set Styles
@@ -94,44 +98,91 @@ namespace IoncrossKerbal_SRB
 
         private void DrawInfo()
         {
+            DrawPoints();
         }
 
         private void DrawPoints ()
         {
             GUILayout.BeginHorizontal();
             {
-                GUILayout.Label("point");
-                GUILayout.Label("Fuel Percent");
-                GUILayout.Label("Thrust Precent");
+                GUILayout.Space(LABLES_Y_WIDTH + 15);
+                GUILayout.Label("Point", GUILayout.Width(COLWIDTH_POINTNUM));
+                GUILayout.Label("Fuel (%)", GUILayout.Width(COLWIDTH_POINTX));
+                GUILayout.Label("Thrust (%)", GUILayout.Width(COLWIDTH_POINTY));
             }
             GUILayout.EndHorizontal();
 
-            int pointNum = 0;
-            //foreach (Tuple<float, float> point in cruvePoints)
-            //{
-            //    DrawPoint(pointNum++, point);
-            //}
+            int pointIndex = 0;
+            foreach (ThrustPoint point in thrustCurve.list_points)
+            {
+                DrawPoint(pointIndex++, point);
+            }
         }
-        //private void DrawPoint(int num, Tuple<float, float> point)
-        //{
-        //    GUILayout.BeginHorizontal();
-        //    {
-        //        GUILayout.Label("point " + num.ToString());
-        //        GUILayout.Label(point.Item1.ToString());
-        //        GUILayout.Label(point.Item2.ToString());
-        //    }
-        //    GUILayout.EndHorizontal();
-        //}
+        private void DrawPoint(int num, ThrustPoint point)
+        {
+            string point_x = (Math.Round(point.timePortion * 100f, 2)).ToString();
+            string point_x_last = point_x;
+            string point_y = (Math.Round(point.thrustPortion * 100f, 2)).ToString();
+            string point_y_last = point_y;
+
+            GUILayout.BeginHorizontal();
+            {
+                GUILayout.Space(LABLES_Y_WIDTH + 15);
+                GUILayout.Label("point " + num.ToString(), GUILayout.Width(COLWIDTH_POINTNUM));
+
+                point_x = GUILayout.TextField(point_x, GUILayout.Width(COLWIDTH_POINTX));
+                point_y = GUILayout.TextField(point_y, GUILayout.Width(COLWIDTH_POINTY));
+            }
+            GUILayout.EndHorizontal();
+
+            if (point_x_last != point_x)
+            {
+                float newX;
+                if (float.TryParse(point_x, out newX))
+                {
+                    if (newX > 100f)
+                        newX = 100f;
+                    else if (newX < 0f)
+                        newX = 0f;
+
+                    point.timePortion = newX / 100f;
+                }
+                else if (point_x == "")
+                    point.timePortion = 0;
+
+                UpdateCruveTexture();
+                module_srb.module_engine.thrustPercentage = thrustCurve.CalculateAverageThrust() * 100f;
+            }
+
+            if (point_y_last != point_y)
+            {
+                float newY;
+                if (float.TryParse(point_y, out newY))
+                {
+                    if (newY > 100f)
+                        newY = 100f;
+                    else if (newY < 0f)
+                        newY = 0f;
+
+                    point.thrustPortion = newY / 100f;
+                }
+                else if (point_y == "")
+                    point.thrustPortion = 0;
+
+                UpdateCruveTexture();
+                module_srb.module_engine.thrustPercentage = thrustCurve.CalculateAverageThrust() * 100f;
+            }
+        }
 
         private void DrawCruve()
         {
             GUILayout.BeginHorizontal();
             {
-                GUILayout.BeginVertical(GUILayout.Width(LABLES_X_WIDTH));
+                GUILayout.BeginVertical(GUILayout.Width(LABLES_Y_WIDTH));
                 {
                     GUILayout.Space(10);
-                    GUILayout.Label(srbManager.engine.maxThrust.ToString("F0") + " kN", TopLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
-                    GUILayout.Label((srbManager.engine.maxThrust / 2f).ToString("F0") + " kN", MidLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+                    GUILayout.Label(module_srb.module_engine.maxThrust.ToString("F0") + " kN", TopLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+                    GUILayout.Label((module_srb.module_engine.maxThrust / 2f).ToString("F0") + " kN", MidLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
                     GUILayout.Label("0 kN", BottomLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
                 }
                 GUILayout.EndVertical();
@@ -141,9 +192,9 @@ namespace IoncrossKerbal_SRB
             GUILayout.EndHorizontal();
 
             GUILayout.Space(5);
-            GUILayout.BeginHorizontal(GUILayout.Height(LABLES_Y_HEIGHT));
+            GUILayout.BeginHorizontal(GUILayout.Height(LABLES_X_HEIGHT));
             {
-                GUILayout.Space(LABLES_X_WIDTH + 15);
+                GUILayout.Space(LABLES_Y_WIDTH + 15);
                 GUILayout.Label("100% fuel", LeftLable, GUILayout.Width(GRAPH_WIDTH / 3));
                 GUILayout.Label("50% fuel", CentreLable, GUILayout.Width(GRAPH_WIDTH / 3));
                 GUILayout.Label("0% fuel", RightLable, GUILayout.Width(GRAPH_WIDTH / 3));
@@ -155,12 +206,10 @@ namespace IoncrossKerbal_SRB
 
         public void UpdateCruveTexture()
         {
-            float scale = srbManager.engine.maxThrust / curveTexture.height;
-
             int x, y;
             int val;
             Color background;
-            
+
             for (y = 0; y < curveTexture.height; ++y)
             {
                 background = new Color((float)y / curveTexture.height *0.5f, 0.0f, 0.0f);
@@ -172,8 +221,7 @@ namespace IoncrossKerbal_SRB
 
             for (x = 0; x < curveTexture.width; ++x)
             {
-                //val = (int)Math.Round(srbManager.thrustPercentCurve.Evaluate((cruveTexture.width - x) / cruveTexture.width) / 100f, MidpointRounding.AwayFromZero) * cruveTexture.height;
-                val = (int)Math.Round(50f / 100f * curveTexture.height, MidpointRounding.AwayFromZero);
+                val = (int)Math.Round(thrustCurve.Evaluate((float)x / curveTexture.width) * curveTexture.height, MidpointRounding.AwayFromZero);
                 for (y = val - curveWidth / 2; y < val + curveWidth / 2 && y < curveTexture.height; ++y)
                 {
                     if (y >= 0)

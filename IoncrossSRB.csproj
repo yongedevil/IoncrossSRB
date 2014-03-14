@@ -49,8 +49,10 @@
     <Compile Include="Source\IonModuleSRB.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Source\ParseHelper.cs" />
+    <Compile Include="Source\ThrustCurve.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="Notes\" />
     <Folder Include="Package\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
