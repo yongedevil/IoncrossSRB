@@ -16,8 +16,11 @@ namespace IoncrossKerbal_SRB
     public class IonGUIThrustCurve
     {
         public const int COLWIDTH_POINTNUM = 75;
+        public const int COLWIDTH_POINTTEXTFIELD = 80;
+
         public const int COLWIDTH_POINTX = 80;
         public const int COLWIDTH_POINTY = 80;
+        public const int COLWIDTH_POINTZ = 80;
 
         public const int GRAPH_HEIGHT = 200;
         public const int GRAPH_WIDTH = 400;
@@ -29,16 +32,9 @@ namespace IoncrossKerbal_SRB
 
         public Rect windowPos;
 
+        public Color colour_background;
         public Color colour_thrust;
         public Color colour_fuel;
-
-        public GUIStyle windowStyle;
-        private GUIStyle TopLabel;
-        private GUIStyle MidLabel;
-        private GUIStyle BottomLabel;
-        private GUIStyle LeftLable;
-        private GUIStyle CentreLable;
-        private GUIStyle RightLable;
 
         Texture2D curveTexture;
 
@@ -53,6 +49,7 @@ namespace IoncrossKerbal_SRB
             module_srb = module;
             thrustCurve = curve;
 
+            colour_background = new Color(0.0f, 0.0f, 0.0f);
             colour_thrust = Color.red;
             colour_fuel = Color.magenta;
 
@@ -66,20 +63,6 @@ namespace IoncrossKerbal_SRB
             //Set Styles
             GUIStyle BaseLabel = new GUIStyle();
             BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
-
-            TopLabel = new GUIStyle(BaseLabel);
-            MidLabel = new GUIStyle(BaseLabel);
-            BottomLabel = new GUIStyle(BaseLabel);
-            LeftLable = new GUIStyle(BaseLabel);
-            CentreLable = new GUIStyle(BaseLabel);
-            RightLable = new GUIStyle(BaseLabel);
-
-            TopLabel.alignment = TextAnchor.UpperCenter;
-            MidLabel.alignment = TextAnchor.MiddleCenter;
-            BottomLabel.alignment = TextAnchor.LowerCenter;
-            LeftLable.alignment = TextAnchor.MiddleLeft;
-            CentreLable.alignment = TextAnchor.MiddleCenter;
-            RightLable.alignment = TextAnchor.MiddleRight;
 
             UpdateCruveTexture();
         }
@@ -102,11 +85,23 @@ namespace IoncrossKerbal_SRB
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
         }
 
+        /************************************************************************\
+         * IonGUIGenerator class                                                *
+         * DrawInfo function                                                    *
+         *                                                                      *
+         * Draws the info section of the window.                                *
+        \************************************************************************/
         private void DrawInfo()
         {
             DrawPoints();
         }
 
+        /************************************************************************\
+         * IonGUIGenerator class                                                *
+         * DrawPoints function                                                  *
+         *                                                                      *
+         * Draws the list of ThrustPoints info to the window.                   *
+        \************************************************************************/
         private void DrawPoints ()
         {
             GUILayout.BeginHorizontal();
@@ -115,7 +110,7 @@ namespace IoncrossKerbal_SRB
                 GUILayout.Label("Point", GUILayout.Width(COLWIDTH_POINTNUM));
                 GUILayout.Label("Time (%)", GUILayout.Width(COLWIDTH_POINTX));
                 GUILayout.Label("Thrust (%)", GUILayout.Width(COLWIDTH_POINTY));
-                GUILayout.Label("Fuel (%)", GUILayout.Width(COLWIDTH_POINTY));
+                GUILayout.Label("Fuel (%)", GUILayout.Width(COLWIDTH_POINTZ));
             }
             GUILayout.EndHorizontal();
 
@@ -135,6 +130,18 @@ namespace IoncrossKerbal_SRB
                 DrawPoint(i, point, min, max);
             }
         }
+
+        /************************************************************************\
+         * IonGUIGenerator class                                                *
+         * DrawPoint function                                                   *
+         *                                                                      *
+         * Draws a single ThrustPoint to the window.                            *
+         *                                                                      *
+         * num:     number of this point.                                       *
+         * point:   point to draw info for.                                     *
+         * timeMin: minimum timePortion value for this point.                   *
+         * timeMax: maximum timePortion value for this point.                   *
+        \************************************************************************/
         private void DrawPoint(int num, ThrustPoint point, float timeMin, float timeMax)
         {
             float slide_time = point.timePortion;
@@ -150,91 +157,132 @@ namespace IoncrossKerbal_SRB
                 GUILayout.Space(LABLES_Y_WIDTH + 15);
                 GUILayout.Label("point " + num.ToString(), GUILayout.Width(COLWIDTH_POINTNUM));
 
+                //Time
                 GUILayout.BeginVertical(GUILayout.Width(COLWIDTH_POINTX));
                 {
                     //if this is the first or last point use a label instead of a textfield
                     if (0 != point.timePortion && 1 != point.timePortion)
                     {
-                        point_time = GUILayout.TextField(point_time);
-                        slide_time = GUILayout.HorizontalSlider(slide_time, timeMin, timeMax);
+                        DrawTextFieldAndSlider(point_time, slide_time, timeMin, timeMax);
                     }
                     else
                     {
-                        GUILayout.Label(point_time);
+                        GUILayout.Label(point_time + "%");
                     }
 
                 }
                 GUILayout.EndVertical();
 
+                //Thrust
                 GUILayout.BeginVertical(GUILayout.Width(COLWIDTH_POINTY));
                 {
-                    point_thrust = GUILayout.TextField(point_thrust);
-                    slide_thrust = GUILayout.HorizontalSlider(slide_thrust, thrustCurve.minimumThrust, 1);
+                    DrawTextFieldAndSlider(point_thrust, slide_thrust, thrustCurve.minimumThrust, 1);
                 }
                 GUILayout.EndVertical();
 
-                GUILayout.Label(point.fuelPortion.ToString(), GUILayout.Width(COLWIDTH_POINTY));
+                //Fuel
+                GUILayout.Label((point.fuelPortion * 100f).ToString("F1") + "%", GUILayout.Width(COLWIDTH_POINTFIELD));
             }
             GUILayout.EndHorizontal();
 
-            if (point_time_last != point_time)
+            //Update values if they have been changed
+            CheckAndUpdate(point_time, point_time_last, 100f, slide_time, ref point.timePortion, timeMin + 0.01, timeMax - 0.01);
+            CheckAndUpdate(point_thrust, point_thrust_last, 100f, slide_thrust, ref point.thrustPortion, thrustCurve.minimumThrust, 1f);
+        }
+
+
+        /************************************************************************\
+         * IonGUIGenerator class                                                *
+         * DrawTextFieldAndSlider function                                      *
+         *                                                                      *
+         * Draws a textFeild and HorizontalSlider to the window.                *
+         *                                                                      *
+         * strVal:          String to display in the TextField.                 *
+         * slideVal:        Value to set the slider to.                         *
+         * minVal:          minimum value for the slider.                       *
+         * maxVal:          maximum value for the slider.                       *
+        \************************************************************************/
+        private void DrawTextFieldAndSlider(ref string strVal, ref float slideVal, float minVal, float maxVal)
+        {
+            GUILayout.BeginHorizontal();
             {
-                float newTime;
-                if (float.TryParse(point_time, out newTime))
+                strVal = GUILayout.TextField(strVal, GUILayout.Width(COLWIDTH_POINTTEXTFIELD) * 0.5f);
+                GUILayout.Label("%");
+            }
+            GUILayout.EndHorizontal();
+
+            slideVal = GUILayout.HorizontalSlider(slideVal, minVal, maxVal);
+        }
+
+
+        /************************************************************************\
+         * IonGUIGenerator class                                                *
+         * CheckAndUpdate function                                              *
+         *                                                                      *
+         * Checks string and slider values for changes and updates them if      *
+         * necessary.                                                           *
+         *                                                                      *
+         * strVal:          String returned by the TextField.                   *
+         * strVal_origonal: String passed into the TextField.                   *
+         * strModifier:     Ratio of the string value to the field value.       *
+         * slideVal:        Value returned by the HorizontalSlider.             *
+         * field:           reference to the variable to update.                *
+         * minVal:          minimum value for this field.                       *
+         * maxVal:          maximum value for this field.                       *
+        \************************************************************************/
+        private void CheckAndUpdate(string strVal, string strVal_origonal, float strModifier, ref float field, float slideVal, float minVal, float maxVal)
+        {
+            float newVal;
+
+            if (strVal_origonal != strVal)
+            {
+                if(float.TryParse(strVal, out newVal))
                 {
-                    if (newTime > 100f)
-                        newTime = 100f;
-                    else if (newTime < 0f)
-                        newTime = 0f;
+                    newVal /= strModifier;
 
-                    point.timePortion = newTime / 100f;
+                    if (newVal > maxVal)
+                        newVal = maxVal;
+                    else if (newVal < minVal)
+                        newVal = minVal;
+
+                    field = newVal;
                 }
-                else if (point_time == "")
-                    point.timePortion = 0;
-
-                module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
-            }
-            else if (slide_time != point.timePortion)
-            {
-                point.timePortion = (float)Math.Round(slide_time, 3);
-                module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
-            }
-
-            if (point_thrust_last != point_thrust)
-            {
-                float newThrust;
-                if (float.TryParse(point_thrust, out newThrust))
+                else if (strVal == "")
                 {
-                    if (newThrust > 100f)
-                        newThrust = 100f;
-                    else if (newThrust < thrustCurve.minimumThrust * 100f)
-                        newThrust = thrustCurve.minimumThrust * 100f;
-
-                    point.thrustPortion = newThrust / 100f;
+                    field = minVal;
                 }
-                else if (point_thrust == "")
-                    point.thrustPortion = 0;
-
-                module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
             }
-            else if (slide_thrust != point.thrustPortion)
+            else if (slideVal != field)
             {
-                point.thrustPortion = (float)Math.Round(slide_thrust, 3);
+                field = (float)Math.Round(slideVal, 3);
                 module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
             }
         }
 
+
+        /************************************************************************\
+         * IonGUIGenerator class                                                *
+         * DrawCruve function                                                   *
+         *                                                                      *
+         * Draws the cruve section of the window.                               *
+        \************************************************************************/
         private void DrawCruve()
         {
             GUILayout.BeginHorizontal();
             {
-                //left y axis (thrust)
+                //left y axis labels (thrust)
                 GUILayout.BeginVertical(GUILayout.Width(LABLES_Y_WIDTH));
                 {
-                    GUILayout.Label("Thrust", TopLabel);
-                    GUILayout.Label(module_srb.module_engine.maxThrust.ToString("F0") + " kN", TopLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
-                    GUILayout.Label((module_srb.module_engine.maxThrust * 0.5f).ToString("F0") + " kN", MidLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
-                    GUILayout.Label("0 kN", BottomLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+                    BaseLabel.normal.textColor = colour_thrust;
+                    BaseLabel.alignment = TextAnchor.UpperCenter;
+                    GUILayout.Label("Thrust", BaseLabel);
+                    GUILayout.Label(module_srb.module_engine.maxThrust.ToString("F0") + " kN", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+
+                    BaseLabel.alignment = TextAnchor.MiddleCenter;
+                    GUILayout.Label((module_srb.module_engine.maxThrust * 0.5f).ToString("F0") + " kN", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+
+                    BaseLabel.alignment = TextAnchor.LowerCenter;
+                    GUILayout.Label("0 kN", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
                 }
                 GUILayout.EndVertical();
 
@@ -246,13 +294,20 @@ namespace IoncrossKerbal_SRB
                 }
                 GUILayout.EndVertical();
 
-                //right y axis (fuel)
+                //right y axis labels (fuel)
                 GUILayout.BeginVertical(GUILayout.Width(LABLES_Y_WIDTH));
                 {
-                    GUILayout.Label("Fuel", TopLabel);
-                    GUILayout.Label(module_srb.fuelMass.ToString("F0") + " t", TopLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
-                    GUILayout.Label((module_srb.fuelMass * 0.5f).ToString("F0") + " t", MidLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
-                    GUILayout.Label("0 t", BottomLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+                    BaseLabel.normal.textColor = colour_fuel;
+                    BaseLabel.alignment = TextAnchor.UpperCenter;
+
+                    GUILayout.Label("Fuel", BaseLabel);
+                    GUILayout.Label(module_srb.fuelMass.ToString("F0") + " t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+
+                    BaseLabel.alignment = TextAnchor.MiddleCenter;
+                    GUILayout.Label((module_srb.fuelMass * 0.5f).ToString("F0") + " t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+
+                    BaseLabel.alignment = TextAnchor.LowerCenter;
+                    GUILayout.Label("0 t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
                 }
                 GUILayout.EndVertical();
             }
@@ -263,17 +318,25 @@ namespace IoncrossKerbal_SRB
             {
                 GUILayout.Space(LABLES_Y_WIDTH + 15);
 
-                //x axis (time)
+                //bottom x axis labels (time)
                 GUILayout.BeginVertical();
                 {
                     GUILayout.BeginHorizontal();
                     {
-                        GUILayout.Label("0 s", LeftLable, GUILayout.Width(GRAPH_WIDTH / 3));
-                        GUILayout.Label((module_srb.burnTime * 0.5f).ToString("F1") + " s", CentreLable, GUILayout.Width(GRAPH_WIDTH / 3));
-                        GUILayout.Label(module_srb.burnTime.ToString("F1") + " s", RightLable, GUILayout.Width(GRAPH_WIDTH / 3));
+                        BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
+                        BaseLabel.alignment = TextAnchor.MiddleLeft;
+                        GUILayout.Label("0 s", BaseLabel, GUILayout.Width(GRAPH_WIDTH / 3));
+
+
+                        BaseLabel.alignment = TextAnchor.MiddleCenter;
+                        GUILayout.Label((module_srb.burnTime * 0.5f).ToString("F1") + " s", BaseLabel, GUILayout.Width(GRAPH_WIDTH / 3));
+
+                        BaseLabel.alignment = TextAnchor.MiddleRight;
+                        GUILayout.Label(module_srb.burnTime.ToString("F1") + " s", BaseLabel, GUILayout.Width(GRAPH_WIDTH / 3));
                     }
                     GUILayout.EndHorizontal();
 
+                    BaseLabel.alignment = TextAnchor.MiddleCenter;
                     GUILayout.Label("Time", CentreLable);
                 }
                 GUILayout.EndVertical();
@@ -292,22 +355,14 @@ namespace IoncrossKerbal_SRB
             for (y = 0; y < curveTexture.height; ++y)
             {
                 //background = new Color((float)y / curveTexture.height * 0.5f, 0.0f, 0.0f);
-                background = new Color(0.0f, 0.0f, 0.0f);
                 for (x = 0; x < curveTexture.width; ++x)
                 {
-                    curveTexture.SetPixel(x, y, background);
+                    curveTexture.SetPixel(x, y, colour_background);
                 }
             }
 
             for (x = 0; x < curveTexture.width; ++x)
             {
-                //Add thrust curve
-                val = (int)Math.Round(thrustCurve.Evaluate((float)x / curveTexture.width) * curveTexture.height, MidpointRounding.AwayFromZero);
-                for (y = val - curveWidth / 2; y < val + curveWidth / 2 && y < curveTexture.height; ++y)
-                {
-                    if (y >= 0)
-                        curveTexture.SetPixel(x, y, colour_thrust);
-                }
 
                 //Add fuel curve
                 val = (int)Math.Round(thrustCurve.CalculateFuelPortion((float)x / curveTexture.width) * curveTexture.height, MidpointRounding.AwayFromZero);
@@ -315,6 +370,14 @@ namespace IoncrossKerbal_SRB
                 {
                     if (y >= 0)
                         curveTexture.SetPixel(x, y, colour_fuel);
+                }
+
+                //Add thrust curve
+                val = (int)Math.Round(thrustCurve.Evaluate((float)x / curveTexture.width) * curveTexture.height, MidpointRounding.AwayFromZero);
+                for (y = val - curveWidth / 2; y < val + curveWidth / 2 && y < curveTexture.height; ++y)
+                {
+                    if (y >= 0)
+                        curveTexture.SetPixel(x, y, colour_thrust);
                 }
             }
 
