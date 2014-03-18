@@ -16,11 +16,7 @@ namespace IoncrossKerbal_SRB
     public class IonGUIThrustCurve
     {
         public const int COLWIDTH_POINTNUM = 75;
-        public const int COLWIDTH_POINTTEXTFIELD = 80;
-
-        public const int COLWIDTH_POINTX = 80;
-        public const int COLWIDTH_POINTY = 80;
-        public const int COLWIDTH_POINTZ = 80;
+        public const int COLWIDTH_POINTFIELD = 80;
 
         public const int GRAPH_HEIGHT = 200;
         public const int GRAPH_WIDTH = 400;
@@ -31,6 +27,8 @@ namespace IoncrossKerbal_SRB
         public ThrustCurve thrustCurve;
 
         public Rect windowPos;
+        public GUIStyle windowStyle;
+        public GUIStyle BaseLabel;
 
         public Color colour_background;
         public Color colour_thrust;
@@ -61,7 +59,7 @@ namespace IoncrossKerbal_SRB
 
 
             //Set Styles
-            GUIStyle BaseLabel = new GUIStyle();
+            BaseLabel = new GUIStyle();
             BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
 
             UpdateCruveTexture();
@@ -108,9 +106,9 @@ namespace IoncrossKerbal_SRB
             {
                 GUILayout.Space(LABLES_Y_WIDTH + 15);
                 GUILayout.Label("Point", GUILayout.Width(COLWIDTH_POINTNUM));
-                GUILayout.Label("Time (%)", GUILayout.Width(COLWIDTH_POINTX));
-                GUILayout.Label("Thrust (%)", GUILayout.Width(COLWIDTH_POINTY));
-                GUILayout.Label("Fuel (%)", GUILayout.Width(COLWIDTH_POINTZ));
+                GUILayout.Label("Time (%)", GUILayout.Width(COLWIDTH_POINTFIELD));
+                GUILayout.Label("Thrust (%)", GUILayout.Width(COLWIDTH_POINTFIELD));
+                GUILayout.Label("Fuel (%)", GUILayout.Width(COLWIDTH_POINTFIELD));
             }
             GUILayout.EndHorizontal();
 
@@ -158,12 +156,12 @@ namespace IoncrossKerbal_SRB
                 GUILayout.Label("point " + num.ToString(), GUILayout.Width(COLWIDTH_POINTNUM));
 
                 //Time
-                GUILayout.BeginVertical(GUILayout.Width(COLWIDTH_POINTX));
+                GUILayout.BeginVertical(GUILayout.Width(COLWIDTH_POINTFIELD));
                 {
                     //if this is the first or last point use a label instead of a textfield
                     if (0 != point.timePortion && 1 != point.timePortion)
                     {
-                        DrawTextFieldAndSlider(point_time, slide_time, timeMin, timeMax);
+                        DrawFieldSlider(ref point.timePortion, timeMin, timeMax, true);
                     }
                     else
                     {
@@ -174,9 +172,9 @@ namespace IoncrossKerbal_SRB
                 GUILayout.EndVertical();
 
                 //Thrust
-                GUILayout.BeginVertical(GUILayout.Width(COLWIDTH_POINTY));
+                GUILayout.BeginVertical(GUILayout.Width(COLWIDTH_POINTFIELD));
                 {
-                    DrawTextFieldAndSlider(point_thrust, slide_thrust, thrustCurve.minimumThrust, 1);
+                    DrawFieldSlider(ref point.thrustPortion, thrustCurve.minimumThrust, 1f, true);
                 }
                 GUILayout.EndVertical();
 
@@ -184,10 +182,6 @@ namespace IoncrossKerbal_SRB
                 GUILayout.Label((point.fuelPortion * 100f).ToString("F1") + "%", GUILayout.Width(COLWIDTH_POINTFIELD));
             }
             GUILayout.EndHorizontal();
-
-            //Update values if they have been changed
-            CheckAndUpdate(point_time, point_time_last, 100f, slide_time, ref point.timePortion, timeMin + 0.01, timeMax - 0.01);
-            CheckAndUpdate(point_thrust, point_thrust_last, 100f, slide_thrust, ref point.thrustPortion, thrustCurve.minimumThrust, 1f);
         }
 
 
@@ -195,54 +189,42 @@ namespace IoncrossKerbal_SRB
          * IonGUIGenerator class                                                *
          * DrawTextFieldAndSlider function                                      *
          *                                                                      *
-         * Draws a textFeild and HorizontalSlider to the window.                *
+         * Draws a textFeild and HorizontalSlider to the window for field.      *
+         * Checks for changes and updates fields.                               *
          *                                                                      *
-         * strVal:          String to display in the TextField.                 *
-         * slideVal:        Value to set the slider to.                         *
-         * minVal:          minimum value for the slider.                       *
-         * maxVal:          maximum value for the slider.                       *
+         * field:       reference to the variable to update.                    *
+         * minVal:      minimum value for the slider.                           *
+         * maxVal:      maximum value for the slider.                           *
+         * isPercent:   if true the TextField is displayed by a percent.        *
         \************************************************************************/
-        private void DrawTextFieldAndSlider(ref string strVal, ref float slideVal, float minVal, float maxVal)
+        private void DrawFieldSlider(ref float field, float minVal, float maxVal, bool isPercent)
         {
+            string strVal = ((isPercent ? 100f : 1f) * field).ToString("F1");
+            string strVal_initial = strVal;
+            float slideVal = field;
+            float newVal;
+
             GUILayout.BeginHorizontal();
             {
-                strVal = GUILayout.TextField(strVal, GUILayout.Width(COLWIDTH_POINTTEXTFIELD) * 0.5f);
-                GUILayout.Label("%");
+                strVal = GUILayout.TextField(strVal, GUILayout.Width(COLWIDTH_POINTFIELD * 0.5f));
+                if(isPercent)
+                    GUILayout.Label("%");
             }
             GUILayout.EndHorizontal();
 
             slideVal = GUILayout.HorizontalSlider(slideVal, minVal, maxVal);
-        }
 
-
-        /************************************************************************\
-         * IonGUIGenerator class                                                *
-         * CheckAndUpdate function                                              *
-         *                                                                      *
-         * Checks string and slider values for changes and updates them if      *
-         * necessary.                                                           *
-         *                                                                      *
-         * strVal:          String returned by the TextField.                   *
-         * strVal_origonal: String passed into the TextField.                   *
-         * strModifier:     Ratio of the string value to the field value.       *
-         * slideVal:        Value returned by the HorizontalSlider.             *
-         * field:           reference to the variable to update.                *
-         * minVal:          minimum value for this field.                       *
-         * maxVal:          maximum value for this field.                       *
-        \************************************************************************/
-        private void CheckAndUpdate(string strVal, string strVal_origonal, float strModifier, ref float field, float slideVal, float minVal, float maxVal)
-        {
-            float newVal;
-
-            if (strVal_origonal != strVal)
+            //Check for changes
+            if (strVal_initial != strVal)
             {
-                if(float.TryParse(strVal, out newVal))
+                if (float.TryParse(strVal, out newVal))
                 {
-                    newVal /= strModifier;
+                    if(isPercent)
+                        newVal /= 100f;
 
-                    if (newVal > maxVal)
+                    if (newVal - maxVal > 0.0001)
                         newVal = maxVal;
-                    else if (newVal < minVal)
+                    else if (minVal - newVal > 0.0001 )
                         newVal = minVal;
 
                     field = newVal;
@@ -251,6 +233,8 @@ namespace IoncrossKerbal_SRB
                 {
                     field = minVal;
                 }
+
+                module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
             }
             else if (slideVal != field)
             {
@@ -258,7 +242,7 @@ namespace IoncrossKerbal_SRB
                 module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
             }
         }
-
+    
 
         /************************************************************************\
          * IonGUIGenerator class                                                *
@@ -276,6 +260,8 @@ namespace IoncrossKerbal_SRB
                     BaseLabel.normal.textColor = colour_thrust;
                     BaseLabel.alignment = TextAnchor.UpperCenter;
                     GUILayout.Label("Thrust", BaseLabel);
+
+                    BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
                     GUILayout.Label(module_srb.module_engine.maxThrust.ToString("F0") + " kN", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
 
                     BaseLabel.alignment = TextAnchor.MiddleCenter;
@@ -299,8 +285,9 @@ namespace IoncrossKerbal_SRB
                 {
                     BaseLabel.normal.textColor = colour_fuel;
                     BaseLabel.alignment = TextAnchor.UpperCenter;
-
                     GUILayout.Label("Fuel", BaseLabel);
+
+                    BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
                     GUILayout.Label(module_srb.fuelMass.ToString("F0") + " t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
 
                     BaseLabel.alignment = TextAnchor.MiddleCenter;
@@ -337,7 +324,7 @@ namespace IoncrossKerbal_SRB
                     GUILayout.EndHorizontal();
 
                     BaseLabel.alignment = TextAnchor.MiddleCenter;
-                    GUILayout.Label("Time", CentreLable);
+                    GUILayout.Label("Time", BaseLabel);
                 }
                 GUILayout.EndVertical();
             }
@@ -350,7 +337,6 @@ namespace IoncrossKerbal_SRB
         {
             int x, y;
             int val;
-            Color background;
 
             for (y = 0; y < curveTexture.height; ++y)
             {

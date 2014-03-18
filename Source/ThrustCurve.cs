@@ -212,8 +212,10 @@ namespace IoncrossKerbal_SRB
          * thrustPortion.                                                       *
          *                                                                      *
          * thrustPortion:   relative thrust set the curve's average to [0, 1].  *
+         *                                                                      *
+         * Returns: average thrust.                                             *
         \************************************************************************/
-        public void ScaleCurve(float thrustPortion)
+        public float ScaleCurve(float thrustPortion)
         {
 #if DEBUG_CALCULATIONS
             UnityEngine.Debug.Log("ThrustCurve.ScaleCurve(" + thrustPortion + ")");
@@ -233,6 +235,9 @@ namespace IoncrossKerbal_SRB
                 for (int i = 0; i < list_points.Count; ++i)
                 {
                     list_points[i].thrustPortion *= modifier;
+#if DEBUG_CALCULATIONS
+                    UnityEngine.Debug.Log("ThrustCurve.ScaleCurve(): point " + i + " | thrustPortion " + list_points[i].thrustPortion);
+#endif
                     high = Math.Max(high, list_points[i].thrustPortion);
                     low = Math.Min(low, list_points[i].thrustPortion);
                 }
@@ -242,6 +247,9 @@ namespace IoncrossKerbal_SRB
                 for (int i = 0; i < list_points.Count; ++i)
                 {
                     list_points[i].thrustPortion = thrustPortion;
+#if DEBUG_CALCULATIONS
+                    UnityEngine.Debug.Log("ThrustCurve.ScaleCurve(): point " + i + " | thrustPortion " + list_points[i].thrustPortion);
+#endif
 
                     high = Math.Max(high, list_points[i].thrustPortion);
                     low = Math.Min(low, list_points[i].thrustPortion);
@@ -260,16 +268,21 @@ namespace IoncrossKerbal_SRB
 #if DEBUG_CALCULATIONS
             UnityEngine.Debug.Log("ThrustCurve.ScaleCurve(): high " + high + " | low " + low + " | modifier " + modifier);
 #endif
-            if (1f != modifier)
+            if (Math.Abs(1f - modifier) > 0.0001)
             {
                 for (int i = 0; i < list_points.Count; i++)
                 {
                     list_points[i].thrustPortion *= modifier;
+#if DEBUG_CALCULATIONS
+                    UnityEngine.Debug.Log("ThrustCurve.ScaleCurve(): point " + i + " | thrustPortion " + list_points[i].thrustPortion);
+#endif
                 }
             }
 
 
             CalculateFuelPoints();
+
+            return CalculateAverageThrust();
         }
 
         /************************************************************************\
