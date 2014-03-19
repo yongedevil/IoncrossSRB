@@ -78,6 +78,7 @@ namespace IoncrossKerbal_SRB
     {
         public const string THRUST_POINT = "point";
         public const string NODE_THRUST_CURVE = "THRUST_CURVE";
+        public const float POINT_TIME_SEP_MIN = 0.01f;
 
         private float minThrust;
         public float minimumThrust
