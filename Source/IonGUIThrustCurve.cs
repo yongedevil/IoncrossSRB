@@ -23,7 +23,6 @@ namespace IoncrossKerbal_SRB
         public const int LABLES_Y_WIDTH = 35;
         public const int LABLES_X_HEIGHT = 35;
 
-        public const float POINT_TIME_SEP_MIN = 0.01f;
         public const int MAX_POINTS = 10;
 
         public IonModuleSRB module_srb;
@@ -124,14 +123,14 @@ namespace IoncrossKerbal_SRB
 
                 if (i > 0)
                 {
-                    min = thrustCurve.list_points[i - 1].timePortion + POINT_TIME_SEP_MIN;
+                    min = thrustCurve.list_points[i - 1].timePortion + ThrustCurve.POINT_TIME_SEP_MIN;
                     if (min > thrustCurve.list_points[i].timePortion)
                         min = thrustCurve.list_points[i].timePortion;
                 }
 
                 if (i + 1 < thrustCurve.list_points.Count)
                 {
-                    max = thrustCurve.list_points[i + 1].timePortion - POINT_TIME_SEP_MIN;
+                    max = thrustCurve.list_points[i + 1].timePortion - ThrustCurve.POINT_TIME_SEP_MIN;
                     if (max < thrustCurve.list_points[i].timePortion)
                         max = thrustCurve.list_points[i].timePortion;
                 }
@@ -208,11 +207,11 @@ namespace IoncrossKerbal_SRB
 
                 //Insert point button
                 //POINT_TIME_SEP_MIN is multiplied by 3 to make sure there's enough space for a new point (*2) plus a little extra
-                if (point.timePortion > timeMin + POINT_TIME_SEP_MIN * 3 && thrustCurve.list_points.Count < MAX_POINTS)
+                if (point.timePortion > timeMin + ThrustCurve.POINT_TIME_SEP_MIN * 3 && thrustCurve.list_points.Count < MAX_POINTS)
                 {
                     if (GUILayout.Button("Insert"))
                     {
-                        float newPointTime = (point.timePortion - POINT_TIME_SEP_MIN + timeMin) * 0.5f;
+                        float newPointTime = (point.timePortion - ThrustCurve.POINT_TIME_SEP_MIN + timeMin) * 0.5f;
                         thrustCurve.AddValue(newPointTime, thrustCurve.Evaluate(newPointTime));
                     }
                 }
@@ -270,14 +269,14 @@ namespace IoncrossKerbal_SRB
                     field = minVal;
                 }
 
-                module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
+                module_srb.SetThrustPercent(thrustCurve.CalculateAverageThrust() * 100f);
                 thrustCurve.CalculateFuelPoints();
                 UpdateCruveTexture();
             }
             else if (slideVal != field)
             {
                 field = (float)Math.Round(slideVal, 3);
-                module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
+                module_srb.SetThrustPercent(thrustCurve.CalculateAverageThrust() * 100f);
                 thrustCurve.CalculateFuelPoints();
                 UpdateCruveTexture();
             }
@@ -328,10 +327,10 @@ namespace IoncrossKerbal_SRB
                     GUILayout.Label("Fuel", BaseLabel);
 
                     BaseLabel.normal.textColor = Color.white;
-                    GUILayout.Label(module_srb.fuelMass.ToString("F0") + " t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+                    GUILayout.Label(module_srb.fuelMass_display.ToString("F0") + " t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
 
                     BaseLabel.alignment = TextAnchor.MiddleCenter;
-                    GUILayout.Label((module_srb.fuelMass * 0.5f).ToString("F0") + " t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
+                    GUILayout.Label((module_srb.fuelMass_display * 0.5f).ToString("F0") + " t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
 
                     BaseLabel.alignment = TextAnchor.LowerCenter;
                     GUILayout.Label("0 t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
