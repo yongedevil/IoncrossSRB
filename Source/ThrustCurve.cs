@@ -1,6 +1,6 @@
-﻿#define DEBUG_SRB
+﻿//#define DEBUG_SRB
 //#define DEBUG_UPDATES
-#define DEBUG_CALCULATIONS
+//#define DEBUG_CALCULATIONS
 
 using System;
 using System.Collections.Generic;

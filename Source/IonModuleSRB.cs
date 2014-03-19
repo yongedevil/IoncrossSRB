@@ -1,4 +1,4 @@
-﻿#define DEBUG_SRB
+﻿//#define DEBUG_SRB
 //#define DEBUG_UPDATES
 //#define DEBUG_CALCULATIONS
 
@@ -198,7 +198,9 @@ namespace IoncrossKerbal_SRB
 
                 if (0 != (PartModule.StartState.PreLaunch & state))
                 {
+#if DEBUG_SRB
                     module_engine.Fields["thrustPercentage"].guiActive = true;
+#endif
                 }
 
             }
