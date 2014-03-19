@@ -1,6 +1,6 @@
 ﻿//#define DEBUG
 //#define DEBUG_UPDATES
-#define DEBUG_CALCULATIONS
+//#define DEBUG_CALCULATIONS
 
 using System;
 using System.Collections.Generic;
@@ -22,6 +22,9 @@ namespace IoncrossKerbal_SRB
         public const int GRAPH_WIDTH = 400;
         public const int LABLES_Y_WIDTH = 35;
         public const int LABLES_X_HEIGHT = 35;
+
+        public const float POINT_TIME_SEP_MIN = 0.01f;
+        public const int MAX_POINTS = 10;
 
         public IonModuleSRB module_srb;
         public ThrustCurve thrustCurve;
@@ -120,10 +123,18 @@ namespace IoncrossKerbal_SRB
                 ThrustPoint point = thrustCurve.list_points[i];
 
                 if (i > 0)
-                    min = thrustCurve.list_points[i - 1].timePortion;
+                {
+                    min = thrustCurve.list_points[i - 1].timePortion + POINT_TIME_SEP_MIN;
+                    if (min > thrustCurve.list_points[i].timePortion)
+                        min = thrustCurve.list_points[i].timePortion;
+                }
 
                 if (i + 1 < thrustCurve.list_points.Count)
-                    max = thrustCurve.list_points[i + 1].timePortion;
+                {
+                    max = thrustCurve.list_points[i + 1].timePortion - POINT_TIME_SEP_MIN;
+                    if (max < thrustCurve.list_points[i].timePortion)
+                        max = thrustCurve.list_points[i].timePortion;
+                }
 
                 DrawPoint(i, point, min, max);
             }
@@ -180,6 +191,31 @@ namespace IoncrossKerbal_SRB
 
                 //Fuel
                 GUILayout.Label((point.fuelPortion * 100f).ToString("F1") + "%", GUILayout.Width(COLWIDTH_POINTFIELD));
+
+
+                //remove point button
+                //If not first or last point
+                if (0 != point.timePortion && 1 != point.timePortion)
+                {
+                    if (GUILayout.Button("Del"))
+                    {
+                        thrustCurve.Remove(point);
+                        windowPos.height = 100;
+                        thrustCurve.CalculateFuelPoints();
+                        UpdateCruveTexture();
+                    }
+                }
+
+                //Insert point button
+                //POINT_TIME_SEP_MIN is multiplied by 3 to make sure there's enough space for a new point (*2) plus a little extra
+                if (point.timePortion > timeMin + POINT_TIME_SEP_MIN * 3 && thrustCurve.list_points.Count < MAX_POINTS)
+                {
+                    if (GUILayout.Button("Insert"))
+                    {
+                        float newPointTime = (point.timePortion - POINT_TIME_SEP_MIN + timeMin) * 0.5f;
+                        thrustCurve.AddValue(newPointTime, thrustCurve.Evaluate(newPointTime));
+                    }
+                }
             }
             GUILayout.EndHorizontal();
         }
@@ -235,11 +271,15 @@ namespace IoncrossKerbal_SRB
                 }
 
                 module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
+                thrustCurve.CalculateFuelPoints();
+                UpdateCruveTexture();
             }
             else if (slideVal != field)
             {
                 field = (float)Math.Round(slideVal, 3);
                 module_srb.thrustPercent = thrustCurve.CalculateAverageThrust() * 100f;
+                thrustCurve.CalculateFuelPoints();
+                UpdateCruveTexture();
             }
         }
     
@@ -261,7 +301,7 @@ namespace IoncrossKerbal_SRB
                     BaseLabel.alignment = TextAnchor.UpperCenter;
                     GUILayout.Label("Thrust", BaseLabel);
 
-                    BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
+                    BaseLabel.normal.textColor = Color.white;
                     GUILayout.Label(module_srb.module_engine.maxThrust.ToString("F0") + " kN", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
 
                     BaseLabel.alignment = TextAnchor.MiddleCenter;
@@ -275,7 +315,7 @@ namespace IoncrossKerbal_SRB
                 //Graph
                 GUILayout.BeginVertical();
                 {
-                    GUILayout.Space(5);
+                    GUILayout.Space(15);
                     GUILayout.Box(curveTexture);
                 }
                 GUILayout.EndVertical();
@@ -287,7 +327,7 @@ namespace IoncrossKerbal_SRB
                     BaseLabel.alignment = TextAnchor.UpperCenter;
                     GUILayout.Label("Fuel", BaseLabel);
 
-                    BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
+                    BaseLabel.normal.textColor = Color.white;
                     GUILayout.Label(module_srb.fuelMass.ToString("F0") + " t", BaseLabel, GUILayout.Height(GRAPH_HEIGHT / 3));
 
                     BaseLabel.alignment = TextAnchor.MiddleCenter;
@@ -310,7 +350,7 @@ namespace IoncrossKerbal_SRB
                 {
                     GUILayout.BeginHorizontal();
                     {
-                        BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
+                        BaseLabel.normal.textColor = Color.white;
                         BaseLabel.alignment = TextAnchor.MiddleLeft;
                         GUILayout.Label("0 s", BaseLabel, GUILayout.Width(GRAPH_WIDTH / 3));
 
@@ -323,6 +363,7 @@ namespace IoncrossKerbal_SRB
                     }
                     GUILayout.EndHorizontal();
 
+                    BaseLabel.normal.textColor = HighLogic.Skin.window.normal.textColor;
                     BaseLabel.alignment = TextAnchor.MiddleCenter;
                     GUILayout.Label("Time", BaseLabel);
                 }

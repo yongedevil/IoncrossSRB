@@ -92,6 +92,11 @@ namespace IoncrossKerbal_SRB
             }
         }
 
+        public int numPoints
+        {
+            get { return (null != list_points ? list_points.Count : 0);  }
+        }
+
         public List<ThrustPoint> list_points;
 
 
@@ -192,7 +197,7 @@ namespace IoncrossKerbal_SRB
         public void AddValue(float timePortion, float thrustPortion)
         {
             ThrustPoint p = new ThrustPoint();
-            p.thrustPortion = timePortion;
+            p.timePortion = timePortion;
             p.thrustPortion = thrustPortion;
 
             int i;
@@ -200,6 +205,11 @@ namespace IoncrossKerbal_SRB
             list_points.Insert(i, p);
 
             CalculateFuelPoints();
+        }
+
+        public void Remove(ThrustPoint point)
+        {
+            list_points.Remove(point);
         }
 
 
@@ -503,32 +513,41 @@ namespace IoncrossKerbal_SRB
                     slope = (p0.thrustPortion - p1.thrustPortion) / (p0.timePortion - p1.timePortion);
 
                     /*
-                     * Fuel used up is the relative thrust of this interval compare with the average * the duration of this interval compared with the whole (always 1)
-                     * fuelUsed_interval = averageThrust_interval / averageThrust * time_interval;
                      * fuelRate = thrust / averageThrust
                      * 
                      * thrustSlope = (thrust1 - thrust0) / (time1 - time0)
-                     * thrust0 = thrust slope * time0 + thrust intercept
-                     * thrust intercept = thrust0 - thrust slope * time0
+                     * thrust0 = thrustSlope * time0 + thrustIntercept
+                     * thrustIntercept = thrust0 - thrustSlope * time0
                      * 
-                     * thrust = time * thrust slope + thrust intercept
-                     * thrust = time * (thrust1 - thrust0) / (time1 - time0) + thrust0 - (thrust1 - thrust0) / (time1 - time0) * time0
-                     * thrust = (time - time0) (thrust1 - thrust0) / (time1 - time0) + thrust0
+                     * thrust = time * thrustSlope + thrustIntercept
+                     * thrust = time * thrustSlope + thrust0 - thrustSlope * time0
+                     * thrust = (time - time0) * thrustSlope + thrust0
                      * 
-                     * fuelRate = ((time - time0) (thrust1 - thrust0) / (time1 - time0) + thrust0) / averageThrust
+                     * fuelRate = ((time - time0) * thrustSlope + thrust0) / averageThrust
                      * fuelUsed = intergal of fuelRate with respect to time
                      * 
-                     * fuelRate = (time - thrust0) * (thrust1 - thrust0) / ((time1 - time0) * averageThrust) + thrust0 / averageThrust
-                     * fuelUsed = thrustSlope/(2*averageThrust) * time * time  -  slope*time0/averageThrust * time  +  thrust0/averageThrust * time
-                     * fuleUsed = thrustSlope/(2*averageThrust) * time*time  -  (slope*time0 - thrust0)/averageThrust * time
+                     * fuelRate = ((time - time0) * thrustSlope + thrust0) / averageThrust
+                     * fuelRate = (time * thrustSlope - time0 * thrustSlope + thrust0) / averageThrust
+                     * fuelRate = time*thrustSlope/averageThrust + (thrust0 - time0*thrustSlope)/averageThrust
                      * 
+                     * taking the definite intergal here so it's intergal at time - intergal at time0
+                     * fuelUsed = time*time * thrustSlope/(2*averageThrust)  +  time * (thrust0 - time0*thrustSlope)/averageThrust - time0*time0 * thrustSlope/(2*averageThrust)  -  time0 * (thrust0 - time0*thrustSlope)/averageThrust
+                     *                                                                                                             - time0*time0 * thrustSlope/(2*averageThrust)  -  time0 * (thrust0 - time0*thrustSlope)/averageThrust
+                     *                                                                                                             - time0/averageThrust * time0 * thrustSlope/2  -  time0/averageThrust * (thrust0 - time0*thrustSlope)
+                     *                                                                                                             - time0/averageThrust * (time0 * thrustSlope/2  +  (thrust0 - time0*thrustSlope))
+                     *                                                                                                             - time0/averageThrust * (time0 * thrustSlope/2  +  thrust0 - time0*thrustSlope)
+                     *                                                                                                             - time0/averageThrust * (time0 * thrustSlope * -1/2  +  thrust0)
+                     *                                                                                                             - time0/averageThrust * (thrust0 - time0 * thrustSlope / 2)
+                     *
                      * fuelRemaining = fuel0 - fuelUsed
-                     * fuelRemaining = fuel0 - thrustSlope/(2*averageThrust) * time*time  +  (slope*time0 - thrust0)/averageThrust * time
-                     * 0 = - thrustSlope/(2*averageThrust) * time*time  +  (slope*time0 - thrust0)/averageThrust * time  +  fuel0 - fuelRemaining
+                     * fuelRemaining = fuel0 - time*time * thrustSlope/(2*averageThrust)  -  time * (thrust0 - time0*thrustSlope)/averageThrust + time0/averageThrust * (thrust0 - time0 * thrustSlope / 2)
+                     * 0 = time*time * -thrustSlope/(2*averageThrust)  +  time * (thrustSlope*time0 - thrust0)/averageThrust  +  fuel0 - fuelRemaining + time0/averageThrust * (thrust0 - time0 * thrustSlope / 2)
+                     * 0 = time*time * -thrustSlope/2  +  time * (thrustSlope*time0 - thrust0)  +  fuel0*averageThrust - fuelRemaining*averageThrust + time0 * (thrust0 - time0 * thrustSlope / 2)
+                     * 0 = time*time * -thrustSlope/2  +  time * (thrustSlope*time0 - thrust0)  +  averageThrust(fuel0 - fuelRemaining) + time0 * (thrust0 - time0 * thrustSlope / 2)
                      * 
-                     * time = ( (thrustSlope*time0 + thrust0) +/- sqrt((thrustSlope*time0 + thrust0) * (thrustSlope*time0 + thrust0) - 4 * -thrustSlope/2 * averageThrust(fuel0-fuelUsed)) ) / (2 * -thrustSlope/2)
                      * 
-                     * fuel = fuelStart - fuelUsed
+                     * time = ( (thrustSlope*time0 - thrust0) +/- sqrt((thrustSlope*time0 - thrust0) * (thrustSlope*time0 - thrust0) - 4 * -thrustSlope/2 * averageThrust(fuel0 - fuelRemaining) + time0 * (thrust0 - time0 * thrustSlope / 2) )) / (-thrustSlope)
+                     * 
                      * 
                      */
 
@@ -536,9 +555,9 @@ namespace IoncrossKerbal_SRB
                     Stopwatch sqrtTimer = Stopwatch.StartNew();
 #endif
                     averageThrust = CalculateAverageThrust();
-                    a = -slope / (2 * averageThrust);
-                    b = (slope * p0.timePortion - p0.thrustPortion) / averageThrust;
-                    c = p0.fuelPortion - fuelPortion;
+                    a = -slope * 0.5f ;
+                    b = slope * p0.timePortion - p0.thrustPortion;
+                    c = averageThrust * (p0.fuelPortion - fuelPortion) + p0.timePortion * (p0.thrustPortion - p0.timePortion * slope * 0.5f);
 
                     sqrt = (float)Math.Sqrt(b * b - 4 * a * c);
                     timePortion = (-b - sqrt) / (2 * a);
@@ -550,8 +569,8 @@ namespace IoncrossKerbal_SRB
 
 #if DEBUG_CALCULATIONS
                     sqrtTimer.Stop();
-                    UnityEngine.Debug.Log("ThrustCurve.EvaluateFuel(): calculation time: " + sqrtTimer.ElapsedMilliseconds + " ms");
-                    UnityEngine.Debug.Log("ThrustCurve.EvaluateFuel(): p0 (" + p0.timePortion + ", " + p0.thrustPortion + ") | p1 (" + p1.timePortion + ", " + p1.thrustPortion + ") | slope " + slope);
+                    UnityEngine.Debug.Log("ThrustCurve.EvaluateFuel(): calculation time: " + sqrtTimer.ElapsedMilliseconds + " ms | value " + value);
+                    UnityEngine.Debug.Log("ThrustCurve.EvaluateFuel(): p0 (" + p0.timePortion + ", " + p0.thrustPortion + ", " + p0.fuelPortion + ") | p1 (" + p1.timePortion + ", " + p1.thrustPortion + ", " + p1.fuelPortion + ") | slope " + slope);
                     UnityEngine.Debug.Log("ThrustCurve.EvaluateFuel(): averageThrust " + averageThrust + " | a " + a + " | b " + b + " | c " + c + " | sqrt " + sqrt + " | timePortion " + timePortion);
 #endif
                 }

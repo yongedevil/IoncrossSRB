@@ -1,6 +1,6 @@
 ﻿#define DEBUG_SRB
-#define DEBUG_UPDATES
-#define DEBUG_CALCULATIONS
+//#define DEBUG_UPDATES
+//#define DEBUG_CALCULATIONS
 
 using System;
 using System.Collections.Generic;
@@ -194,6 +194,11 @@ namespace IoncrossKerbal_SRB
 #if DEBUG_SRB
                     Debug.Log("IonModuleSRB.OnStart(): burnTime " + burnTime + " | burnTime_min " + burnTime_min + " | engine.maxThrust " + module_engine.maxThrust + " | thrustPercent " + thrustPercent);
 #endif
+                }
+
+                if (0 != (PartModule.StartState.PreLaunch & state))
+                {
+                    module_engine.Fields["thrustPercentage"].guiActive = true;
                 }
 
             }
